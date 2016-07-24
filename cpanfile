@@ -23,6 +23,7 @@ requires 'MooX::Role::Logger';
 requires 'MooX::TypeTiny';
 requires 'Path::Tiny';
 requires 'Return::Type';
+requires 'String::Tagged';
 requires 'Try::Tiny';
 requires 'Type::Libraries';
 requires 'Type::Library', '0.008';

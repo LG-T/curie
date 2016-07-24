@@ -15,7 +15,7 @@ my $pdf_ref_path = try {
 	plan skip_all => "$_";
 };
 
-plan tests => 1;
+plan tests => 2;
 
 subtest pdf_ref => fun {
 	my $pdf_doc = Renard::Curie::Model::Document::PDF->new(
@@ -31,6 +31,32 @@ subtest pdf_ref => fun {
 	my $first_page = $pdf_doc->get_rendered_page( page_number => 1 );
 	is  $first_page->width, 531, "Check width of first page";
 	is  $first_page->height, 666, "Check height of first page";
+};
+
+subtest "Textual information" => fun {
+	my $pdf_doc = Renard::Curie::Model::Document::PDF->new(
+		filename => $pdf_ref_path
+	);
+
+	my $tagged = $pdf_doc->get_textual_page( 23 );
+
+	my $tagged_line_bbox = "";
+	$tagged->iter_substr_nooverlap(
+		sub {
+			my ( $substring, %tags ) = @_;
+
+			$tagged_line_bbox .=
+				  $tags{line}
+				? "<line bbox='@{[ $tags{line}{bbox} ]}'>$substring</line>"
+				: $substring;
+		},
+		only => [ 'line' ],
+	);
+
+	like(
+		$tagged_line_bbox,
+		qr|\Q<line bbox='261.18 616.16397 269.77766 625.2532'>23</line>\E|,
+		"Stores the page number text and its metadata" );
 };
 
 
