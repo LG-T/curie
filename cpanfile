@@ -10,6 +10,7 @@ requires 'Glib::Object::Introspection';
 requires 'Glib::Object::Subclass';
 requires 'Gtk3';
 requires 'Import::Into';
+requires 'Lingua::EN::Sentence::Offsets';
 requires 'Log::Any';
 requires 'Log::Any::Adapter';
 requires 'Log::Any::Adapter::Base';
