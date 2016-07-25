@@ -3,6 +3,7 @@ package Renard::Curie::Language::EN;
 
 use Renard::Curie::Types qw(InstanceOf);
 use Function::Parameters;
+use Text::Unidecode;
 
 =func apply_sentence_offsets_to_blocks
 
@@ -37,6 +38,20 @@ fun apply_sentence_offsets_to_blocks( (InstanceOf['String::Tagged']) $text ) {
 		only => [ 'block' ],
 	);
 
+}
+
+fun preprocess_for_tts( $text ) {
+	$_ = $text;
+	$_ = unidecode($_); # FIXME this is a sledgehammer approach
+
+	s/\[(\d+(,\s*\d+)*)\]/citation $1/gi; # [12,28] -> citations 12, 28
+	s/\bFig[. ]*(\d+)/Figure $1/gi; # Fig. 4 -> Figure 4
+	s/\bSec[. ]*(\d+)/Section $1/gi; # Sec. 2 -> Section 2
+	s/\bEq[. ]*(\d+)/Equation $1/gi; # Eq. 3 -> Equation 3
+	s/\be\.?g\.?,/for example,/gi; # (e.g., text) -> (for example, text)
+	s/\bi\.?e\.?,/that is,/gi; # (i.e., text) -> (that is, text)
+	s/\bet\s*al\.?/and others/gi; # et al -> and others
+	$_;
 }
 
 1;
