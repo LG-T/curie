@@ -6,8 +6,11 @@ use Moo;
 use Glib 'TRUE', 'FALSE';
 use Glib::Object::Subclass 'Gtk3::Bin';
 use Renard::Curie::Types qw(RenderableDocumentModel RenderablePageModel
-	PageNumber Bool InstanceOf);
+	PageNumber Bool InstanceOf PositiveOrZeroInt);
 use Function::Parameters;
+
+use Renard::Curie::Language::EN;
+use Scalar::Util qw(refaddr);
 
 =attr document
 
@@ -44,6 +47,27 @@ has current_page_number => (
 	default => 1,
 	trigger => 1 # _trigger_current_page_number
 	);
+
+=attr current_sentence_number
+
+TODO
+
+=cut
+has current_sentence_number => (
+	is => 'rw',
+	isa => PositiveOrZeroInt,
+	default => 0,
+	);
+
+=attr current_text_page
+
+TODO
+
+=cut
+has current_text_page => (
+	is => 'lazy', # _build_current_text_page
+	clearer => 1, # clear_current_text_page
+);
 
 =attr drawing_area
 
@@ -313,8 +337,10 @@ method on_draw_page_cb( (InstanceOf['Cairo::Context']) $cr ) {
 
 	my $img = $self->current_rendered_page->cairo_image_surface;
 
-	$cr->set_source_surface($img, ($self->drawing_area->get_allocated_width -
-		$self->current_rendered_page->width) / 2, 0);
+	my @top_left = ( ($self->drawing_area->get_allocated_width -
+		$self->current_rendered_page->width) / 2, 0 );
+	$cr->set_source_surface($img, @top_left);
+
 	$cr->paint;
 
 	$self->drawing_area->set_size_request(
@@ -323,6 +349,23 @@ method on_draw_page_cb( (InstanceOf['Cairo::Context']) $cr ) {
 
 	$self->builder->get_object('page-number-entry')
 		->set_text($self->current_page_number);
+
+	if( @{ $self->current_text_page } ) {
+		my $sentence = $self->current_text_page->[
+			$self->current_sentence_number
+		];
+		for my $bbox_str ( @{ $sentence->{bbox} } ) {
+			my $bbox = [ split ' ', $bbox_str ];
+			$cr->rectangle(
+				$top_left[0] + $bbox->[0],
+				$top_left[1] + $bbox->[1],
+				$bbox->[2] - $bbox->[0],
+				$bbox->[3] - $bbox->[1],
+			);
+			$cr->set_source_rgba(1, 0, 0, 0.2);
+			$cr->fill_preserve;
+		}
+	}
 }
 
 =begin comment
@@ -339,6 +382,8 @@ the component to retrieve the new page and redraw.
 =cut
 method _trigger_current_page_number {
 	$self->refresh_drawing_area;
+	$self->current_sentence_number(0);
+	$self->clear_current_text_page;
 }
 
 =callback on_activate_page_number_entry_cb
@@ -447,6 +492,72 @@ method set_navigation_buttons_sensitivity() {
 		$self->builder->get_object($button_name)
 			->set_sensitive($can_move_back);
 	}
+}
+
+method _build_current_text_page {
+	return [] unless $self->document->can('get_textual_page');
+	my $txt = $self->document->get_textual_page($self->current_page_number);
+	Renard::Curie::Language::EN::apply_sentence_offsets_to_blocks($txt);
+
+	my @sentence_spans = ();
+	$txt->iter_extents(sub {
+		my ($extent, $tag_name, $tag_value) = @_;
+		my $data = {
+			sentence => $extent->substr,
+			extent => $extent,
+		};
+		$data->{sentence}->iter_extents( sub {
+			my ($extent, $tag_name, $tag_value) = @_;
+			push @{  $data->{spans} }, $tag_value;
+		}, only => ['span']);
+		push @sentence_spans, $data;
+	}, only => ['sentence'] );
+
+	for my $sentence (@sentence_spans) {
+		my $extent = $sentence->{extent};
+		$sentence->{first_char} = $txt->get_tag_at( $extent->start, 'char' );
+		$sentence->{last_char} = $txt->get_tag_at( $extent->end-1, 'char' );
+		my @spans = @{ $sentence->{spans} };
+		my @bb = ();
+		if( @spans == 1 ) {
+			# must be in the same span
+			my $first_span = $spans[0];
+			my $in_range = 0;
+			for my $c (@{ $first_span->{char} }) {
+				if( refaddr $c == refaddr $sentence->{first_char} ) {
+					$in_range = 1;
+				}
+
+				push @bb, $c->{bbox} if $in_range;
+
+				if( refaddr $c == refaddr $sentence->{last_char} ) {
+					$in_range = 0;
+					last;
+				}
+			}
+		} else {
+			for my $span (@spans) {
+				push @bb, $span->{bbox};
+			}
+			if( $sentence->{first_char} != $spans[0]{char}[0] ) {
+				shift @bb;
+				for my $char (reverse @{$spans[0]{char}}) {
+					unshift @bb, $char->{bbox};
+					last if refaddr $sentence->{first_char} == refaddr $char;
+				}
+			}
+			if( $sentence->{last_char} != $spans[-1]{char}[-1] ) {
+				pop @bb;
+				for my $char (@{$spans[-1]{char}}) {
+					push @bb, $char->{bbox};
+					last if refaddr $sentence->{last_char} == refaddr $char;
+				}
+			}
+		}
+		$sentence->{bbox} = \@bb;
+	}
+
+	\@sentence_spans;
 }
 
 with qw(

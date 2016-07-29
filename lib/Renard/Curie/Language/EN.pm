@@ -37,7 +37,6 @@ fun apply_sentence_offsets_to_blocks( (InstanceOf['String::Tagged']) $text ) {
 		},
 		only => [ 'block' ],
 	);
-
 }
 
 fun preprocess_for_tts( $text ) {
