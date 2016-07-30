@@ -105,6 +105,12 @@ has tts_window => (
 	isa => InstanceOf['Renard::Curie::Component::TTSWindow'],
 );
 
+has loop => ( is => 'lazy' );
+
+sub _build_loop {
+	IO::Async::Loop::Glib->new;
+}
+
 =classmethod setup_gtk
 
   classmethod setup_gtk()
@@ -172,7 +178,6 @@ Displays L</window> and starts the L<Gtk3> event loop.
 method run() {
 	$self->window->show_all;
 	$self->_logger->info("starting the Gtk main event loop");
-	IO::Async::Loop::Glib->new;
 	Gtk3::main;
 }
 

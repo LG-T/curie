@@ -356,7 +356,6 @@ method on_draw_page_cb( (InstanceOf['Cairo::Context']) $cr ) {
 		my $sentence = $self->current_text_page->[
 			$self->current_sentence_number
 		];
-		use DDP; p $sentence->{bbox};
 		for my $bbox_str ( @{ $sentence->{bbox} } ) {
 			my $bbox = [ split ' ', $bbox_str ];
 			$cr->rectangle(
@@ -384,12 +383,13 @@ the component to retrieve the new page and redraw.
 
 =cut
 method _trigger_current_page_number {
-	$self->refresh_drawing_area;
-	$self->current_sentence_number(0);
 	$self->clear_current_text_page;
+	$self->current_sentence_number(0);
+	$self->refresh_drawing_area;
 }
 
 method _trigger_current_sentence_number {
+	$self->refresh_drawing_area;
 	$self->app->tts_window->update;
 }
 
