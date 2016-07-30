@@ -10,6 +10,7 @@ use Renard::Curie::Types qw(RenderableDocumentModel RenderablePageModel
 use Function::Parameters;
 
 use Renard::Curie::Language::EN;
+use List::AllUtils qw(uniq);
 use Scalar::Util qw(refaddr);
 
 =attr document
@@ -56,6 +57,7 @@ TODO
 has current_sentence_number => (
 	is => 'rw',
 	isa => PositiveOrZeroInt,
+	trigger => 1, # _trigger_current_sentence_number
 	default => 0,
 	);
 
@@ -354,6 +356,7 @@ method on_draw_page_cb( (InstanceOf['Cairo::Context']) $cr ) {
 		my $sentence = $self->current_text_page->[
 			$self->current_sentence_number
 		];
+		use DDP; p $sentence->{bbox};
 		for my $bbox_str ( @{ $sentence->{bbox} } ) {
 			my $bbox = [ split ' ', $bbox_str ];
 			$cr->rectangle(
@@ -362,9 +365,9 @@ method on_draw_page_cb( (InstanceOf['Cairo::Context']) $cr ) {
 				$bbox->[2] - $bbox->[0],
 				$bbox->[3] - $bbox->[1],
 			);
-			$cr->set_source_rgba(1, 0, 0, 0.2);
-			$cr->fill_preserve;
 		}
+		$cr->set_source_rgba(1, 0, 0, 0.2);
+		$cr->fill_preserve;
 	}
 }
 
@@ -384,6 +387,10 @@ method _trigger_current_page_number {
 	$self->refresh_drawing_area;
 	$self->current_sentence_number(0);
 	$self->clear_current_text_page;
+}
+
+method _trigger_current_sentence_number {
+	$self->app->tts_window->update;
 }
 
 =callback on_activate_page_number_entry_cb
@@ -506,10 +513,16 @@ method _build_current_text_page {
 			sentence => $extent->substr,
 			extent => $extent,
 		};
-		$data->{sentence}->iter_extents( sub {
-			my ($extent, $tag_name, $tag_value) = @_;
-			push @{  $data->{spans} }, $tag_value;
-		}, only => ['span']);
+		my $start = $extent->start;
+		my $end = $extent->end;
+		my $last_span = {};
+		for my $pos ($start..$end-1) {
+			my $value = $txt->get_tag_at($pos,'span');
+			if( defined $value && refaddr $last_span != refaddr $value ) {
+				$last_span = $value;
+				push @{ $data->{spans} }, $value;
+			}
+		}
 		push @sentence_spans, $data;
 	}, only => ['sentence'] );
 
@@ -519,40 +532,22 @@ method _build_current_text_page {
 		$sentence->{last_char} = $txt->get_tag_at( $extent->end-1, 'char' );
 		my @spans = @{ $sentence->{spans} };
 		my @bb = ();
-		if( @spans == 1 ) {
-			# must be in the same span
-			my $first_span = $spans[0];
-			my $in_range = 0;
-			for my $c (@{ $first_span->{char} }) {
-				if( refaddr $c == refaddr $sentence->{first_char} ) {
-					$in_range = 1;
-				}
-
-				push @bb, $c->{bbox} if $in_range;
-
-				if( refaddr $c == refaddr $sentence->{last_char} ) {
-					$in_range = 0;
-					last;
-				}
-			}
-		} else {
-			for my $span (@spans) {
-				push @bb, $span->{bbox};
-			}
-			if( $sentence->{first_char} != $spans[0]{char}[0] ) {
-				shift @bb;
-				for my $char (reverse @{$spans[0]{char}}) {
-					unshift @bb, $char->{bbox};
-					last if refaddr $sentence->{first_char} == refaddr $char;
-				}
-			}
-			if( $sentence->{last_char} != $spans[-1]{char}[-1] ) {
-				pop @bb;
-				for my $char (@{$spans[-1]{char}}) {
-					push @bb, $char->{bbox};
-					last if refaddr $sentence->{last_char} == refaddr $char;
-				}
-			}
+		for my $span (@spans) {
+			push @bb, $span->{bbox};
+		}
+		if( $sentence->{first_char} != $spans[0]{char}[0] ) {
+			my $span = shift @bb;
+			my @span_bbox = split ' ', $span;
+			my @char_bbox = split ' ', $sentence->{first_char}{bbox};
+			$span_bbox[0] = $char_bbox[0];
+			unshift @bb, join(' ', @span_bbox);
+		}
+		if( $sentence->{last_char} != $spans[-1]{char}[-1] ) {
+			my $span = pop @bb;
+			my @span_bbox = split ' ', $span;
+			my @char_bbox = split ' ', $sentence->{last_char}{bbox};
+			$span_bbox[2] = $char_bbox[2];
+			push @bb, join(' ', @span_bbox);
 		}
 		$sentence->{bbox} = \@bb;
 	}
@@ -563,6 +558,7 @@ method _build_current_text_page {
 with qw(
 	Renard::Curie::Component::Role::FromBuilder
 	Renard::Curie::Component::Role::UIFileFromPackageName
+	Renard::Curie::Component::Role::HasParentApp
 );
 
 1;

@@ -17,8 +17,11 @@ use Renard::Curie::Component::MenuBar;
 use Renard::Curie::Component::LogWindow;
 use Renard::Curie::Component::FileChooser;
 use Renard::Curie::Component::AccelMap;
+use Renard::Curie::Component::TTSWindow;
 
 use Log::Any::Adapter;
+
+use IO::Async::Loop::Glib;
 
 use Renard::Curie::Types qw(InstanceOf Path Str DocumentModel);
 use Function::Parameters;
@@ -97,6 +100,11 @@ has content_box => (
 	isa => InstanceOf['Gtk3::Box'],
 );
 
+has tts_window => (
+	is => 'rw',
+	isa => InstanceOf['Renard::Curie::Component::TTSWindow'],
+);
+
 =classmethod setup_gtk
 
   classmethod setup_gtk()
@@ -148,6 +156,10 @@ method setup_window() {
 	$self->log_window( $log_win );
 
 	Renard::Curie::Component::AccelMap->new( app => $self );
+
+	$self->tts_window( Renard::Curie::Component::TTSWindow->new(
+		app => $self,
+	));
 }
 
 =method run
@@ -160,6 +172,7 @@ Displays L</window> and starts the L<Gtk3> event loop.
 method run() {
 	$self->window->show_all;
 	$self->_logger->info("starting the Gtk main event loop");
+	IO::Async::Loop::Glib->new;
 	Gtk3::main;
 }
 
@@ -247,6 +260,7 @@ method open_document( (DocumentModel) $doc ) {
 	}
 	my $pd = Renard::Curie::Component::PageDrawingArea->new(
 		document => $doc,
+		app => $self,
 	);
 	$self->outline->update( $doc );
 	$self->page_document_component($pd);
