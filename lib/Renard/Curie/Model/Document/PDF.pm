@@ -100,6 +100,9 @@ fun _walk_page_data( $tagged, $data, $depth, $levels ) {
 		# last level is the character, so we append that to the string
 		$level_tagged .= $data->{c};
 	} else {
+		# empty pages will not have this data
+		return unless exists $data->{ $levels->[$depth+1] };
+
 		my @data_next = @{ $data->{ $levels->[$depth+1] } };
 		for my $next_data (@data_next) {
 			_walk_page_data( $level_tagged, $next_data, $depth+1, $levels );
