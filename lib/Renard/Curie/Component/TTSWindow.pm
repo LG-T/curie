@@ -5,6 +5,7 @@ package Renard::Curie::Component::TTSWindow;
 use Moo;
 use Function::Parameters;
 use Speech::Synthesis;
+use Renard::Curie::Language::EN;
 use List::AllUtils qw(first);
 use IO::Async::Function;
 
